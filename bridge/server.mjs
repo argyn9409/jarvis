@@ -22,7 +22,7 @@ import { uiServer } from './ui.mjs'
 import { chromeAvailable, chromeServer } from './chrome.mjs'
 import { visionServer } from './vision.mjs'
 import { homedir, tmpdir } from 'node:os'
-import { readFileSync, realpathSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync } from 'node:fs'
 import { readFile, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { openRemote, proxyError, vetTarget, PROXY_UA } from './net.mjs'
@@ -290,7 +290,55 @@ function decideTool(name) {
   return ALLOW_WRITES
 }
 
-const SYSTEM_PROMPT = `You are JARVIS. You are speaking out loud to one person.
+/**
+ * The owner's personal context and his "department" of specialist roles.
+ *
+ * Lives OUTSIDE the repository (default ~/lab/jarvis-data, override with
+ * JARVIS_DATA_DIR) because it is private and this fork is public. Layout:
+ *   profile.md       — who he is, companies, rules, folders. Inlined in full.
+ *   agents/*.md      — one file per role, with `name:` / `description:`
+ *                      frontmatter. Only the index is inlined; the model Reads
+ *                      the full file when a request falls in that role.
+ *   output/          — the only place file-writing tools may write without
+ *                      write mode (documents, Excel calculations, drafts).
+ */
+const DATA_DIR = process.env.JARVIS_DATA_DIR || join(homedir(), 'lab', 'jarvis-data')
+const OUTPUT_DIR = join(DATA_DIR, 'output')
+try { mkdirSync(OUTPUT_DIR, { recursive: true }) } catch { /* optional */ }
+
+function loadDepartment() {
+  if (!existsSync(DATA_DIR)) return ''
+  let out = ''
+  try {
+    const profile = readFileSync(join(DATA_DIR, 'profile.md'), 'utf8').trim()
+    if (profile) out += `\n\nOWNER CONTEXT (private, authoritative):\n${profile}`
+  } catch { /* no profile */ }
+  const agentsDir = join(DATA_DIR, 'agents')
+  let index = ''
+  try {
+    for (const f of readdirSync(agentsDir).filter((f) => f.endsWith('.md')).sort()) {
+      const body = readFileSync(join(agentsDir, f), 'utf8')
+      const name = /^name:\s*"?([^"\n]+)"?/m.exec(body)?.[1]?.trim() ?? f
+      const desc = /^description:\s*"?([^"\n]+)"?/m.exec(body)?.[1]?.trim() ?? ''
+      index += `\n- ${name}: ${desc} — file: ${join(agentsDir, f)}`
+    }
+  } catch { /* no agents */ }
+  if (index) {
+    out += `\n\nTHE DEPARTMENT. You are also the orchestrator of the owner's specialist roles.
+When a request falls in a role's area, first Read that role's file with the Read
+tool and follow it exactly, then do the work yourself in that role. Do not
+mention the file or the mechanism; just answer as JARVIS. Roles:${index}
+Written results (letters, KP, Excel calculations, reviews) go as files into
+${OUTPUT_DIR} — say aloud only the gist and where the file is. Never send,
+publish or submit anything on his behalf without his explicit yes to that exact
+text and recipient.`
+  }
+  return out
+}
+const DEPARTMENT = loadDepartment()
+if (DEPARTMENT) console.log(`[jarvis] department context loaded from ${DATA_DIR}`)
+
+const SYSTEM_PROMPT_BASE = `You are JARVIS. You are speaking out loud to one person.
 
 LANGUAGE. Always speak Russian, whatever language the request arrives in. The
 user is in Astana, Kazakhstan; he may mix in Kazakh or English words — understand
@@ -1230,7 +1278,7 @@ wss.on('connection', (socket) => {
       // tuned for a coding agent — verbose, file-oriented, and a large chunk
       // of input tokens on every turn. Replacing it makes the persona stick,
       // keeps answers short enough to speak, and cuts cost per turn.
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt: SYSTEM_PROMPT_BASE + DEPARTMENT,
       // Run from the home directory so project-scoped MCP servers don't shadow
       // the global ones, and so file tools have a sane root.
       cwd: homedir(),
@@ -1272,8 +1320,16 @@ wss.on('connection', (socket) => {
       // through a `Bash: echo hello` without asking, and only reaches us for
       // something with a consequence, like a `touch`. So a deny here is
       // reliable; an absence of a call here is not proof nothing ran.
-      canUseTool: async (toolName) => {
-        const ok = decideTool(toolName)
+      canUseTool: async (toolName, input) => {
+        let ok = decideTool(toolName)
+        // Files may always be written into the department's output folder —
+        // documents and calculations are the point of most roles — and
+        // nowhere else unless write mode is on.
+        if (!ok && ['Write', 'Edit', 'MultiEdit'].includes(toolName)) {
+          const target = resolvePath(String(input?.file_path ?? ''))
+          const rel = relative(OUTPUT_DIR, target)
+          if (rel && !rel.startsWith('..') && !isAbsolute(rel)) ok = true
+        }
         console.log(`[jarvis] tool ${toolName} -> ${ok ? 'allow' : 'deny'}`)
         return ok
           ? { behavior: 'allow' }
