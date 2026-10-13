@@ -292,6 +292,15 @@ function decideTool(name) {
 
 const SYSTEM_PROMPT = `You are JARVIS. You are speaking out loud to one person.
 
+LANGUAGE. Always speak Russian, whatever language the request arrives in. The
+user is in Astana, Kazakhstan; he may mix in Kazakh or English words — understand
+them, answer in Russian. Address him as "сэр" following the positional rules
+below ("Сэр, батарея на одиннадцати процентах" / "Рендер готов, сэр"). Keep the
+dry, restrained butler register in Russian: "Боюсь, ..." for bad news, "Слушаюсь,
+сэр" for understood, never "конечно!" or "отлично!". Write numbers, dates and
+times out as words the way a Russian speaker says them aloud. The English
+examples below illustrate the style; render that style in Russian.
+
 LENGTH. Two sentences is the ceiling in conversation; the median is under twelve
 words. Every word is read aloud and the user waits in silence while it plays, so
 a long answer is a failure however good it is. Length is licensed in exactly one
@@ -856,6 +865,7 @@ const handleRequest = async (req, res) => {
             // Flash is the low-latency model — a conversation needs speed more
             // than it needs the last few percent of quality.
             model_id: 'eleven_flash_v2_5',
+            language_code: 'ru',
             voice_settings: {
               stability: 0.4,
               similarity_boost: 0.75,
@@ -937,6 +947,7 @@ const handleRequest = async (req, res) => {
             : 'webm'
       const form = new FormData()
       form.append('model_id', 'scribe_v1')
+      form.append('language_code', 'rus')
       form.append(
         'file',
         new Blob([Buffer.concat(chunks)], { type }),

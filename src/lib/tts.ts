@@ -179,7 +179,12 @@ function score(v: SpeechSynthesisVoice): number {
 
   // The macOS British male, and the closest thing to the character available
   // without leaving the machine.
-  if (n.startsWith('daniel')) s += 100
+  // Russian voices first: Edge's neural Dmitry is the best male voice on
+  // Windows, then the offline Pavel, then Google's Russian.
+  if (/dmitry|дмитрий/.test(n)) s += 140
+  else if (/pavel|павел/.test(n)) s += 110
+  else if (/google русский|google russian/.test(n)) s += 90
+  else if (n.startsWith('daniel')) s += 100
   else if (n.includes('google uk english male')) s += 85
   else if (/\b(oliver|arthur|jamie|malcolm)\b/.test(n)) s += 80
   // Newer macOS en-GB male voices — casual, but serviceable.
@@ -189,7 +194,8 @@ function score(v: SpeechSynthesisVoice): number {
   if (n.includes('premium')) s += 30
   else if (n.includes('enhanced')) s += 20
 
-  if (/en[-_]gb/i.test(v.lang)) s += 25
+  if (/^ru/i.test(v.lang)) s += 60
+  else if (/en[-_]gb/i.test(v.lang)) s += 25
   else if (/^en/i.test(v.lang)) s += 5
 
   // Voices that clearly aren't a butler.
@@ -197,7 +203,7 @@ function score(v: SpeechSynthesisVoice): number {
     s -= 200
   }
   // Female-presenting names across the English sets.
-  if (/\b(flo|sandy|shelley|kate|serena|fiona|moira|karen|tessa|samantha|zoe|allison|ava|susan)\b/.test(n)) {
+  if (/\b(flo|sandy|shelley|kate|serena|fiona|moira|karen|tessa|samantha|zoe|allison|ava|susan|svetlana|irina|dariya|milena)\b/.test(n)) {
     s -= 60
   }
 
@@ -212,7 +218,7 @@ const USABLE = 40
 export function candidateVoices(): SpeechSynthesisVoice[] {
   return speechSynthesis
     .getVoices()
-    .filter((v) => /^en/i.test(v.lang))
+    .filter((v) => /^ru/i.test(v.lang))
     .map((v) => ({ v, s: score(v) }))
     .filter((x) => x.s >= USABLE)
     .sort((a, b) => b.s - a.s)
@@ -236,7 +242,7 @@ function pickVoice(): SpeechSynthesisVoice | null {
     localStorage.removeItem(VOICE_PREF_KEY)
   }
 
-  cachedVoice = candidateVoices()[0] ?? all.find((v) => /^en/i.test(v.lang)) ?? null
+  cachedVoice = candidateVoices()[0] ?? all.find((v) => /^ru/i.test(v.lang)) ?? null
   return cachedVoice
 }
 
@@ -477,11 +483,11 @@ export function createSpeaker(): Speaker {
       const u = new SpeechSynthesisUtterance(text)
       const voice = pickVoice()
       if (voice) u.voice = voice
-      u.lang = voice?.lang ?? 'en-GB'
+      u.lang = voice?.lang ?? 'ru-RU'
       // Deliberate, and deliberately invariant — the character's pace does not
       // change with stakes, and that steadiness is most of the effect. This
       // lands around 130 wpm, below the median for film dialogue.
-      u.rate = 0.92
+      u.rate = 1.0
       // Mid-baritone, and *not* pushed lower for gravitas. The voice is
       // clarity-weighted rather than chest-weighted; dropping it further reads
       // as a film-trailer voiceover, which is the wrong character entirely.

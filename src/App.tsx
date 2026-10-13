@@ -63,11 +63,12 @@ const newId = () =>
 
 /** The same mishearings voice.ts accepts for the wake word — otherwise a turn
  *  that woke him as "travis" gets that word sent on to the model as a question. */
-const NAME = '(?:jarvis|jarvys|jervis|travis|jarviss|java\'s|jarv)'
+const NAME = '(?:jarvis|jarvys|jervis|travis|jarviss|java\'s|jarv|джарвис\\p{L}{0,2}|джарвиз|джервис|жарвис|дарвис|джарвес|джавис|джарви)'
+const PREFIX = '(?:hey|hi|ok|okay|yo|эй|хей|окей|ок|привет)'
 /** A bare vocative — "Jarvis", "hey jarvis" — with nothing asked. */
-const BARE_NAME = new RegExp(`^(?:hey|hi|ok|okay|yo)?\\s*${NAME}[\\s,.!?]*$`, 'i')
+const BARE_NAME = new RegExp(`^(?:${PREFIX}[\\s,]*)?${NAME}[\\s,.!?]*$`, 'iu')
 /** A leading vocative on a real command: "Jarvis, what's the weather". */
-const LEADING_NAME = new RegExp(`^(?:hey|hi|ok|okay|yo)?\\s*${NAME}\\b[\\s,.:!?-]*`, 'i')
+const LEADING_NAME = new RegExp(`^(?:${PREFIX}[\\s,]*)?${NAME}(?!\\p{L})[\\s,.:!?-]*`, 'iu')
 
 export default function App() {
   const store = useStore
@@ -596,7 +597,7 @@ export default function App() {
         silence()
         const demo = createSpeaker()
         speaker.current = demo
-        demo.say(`Voice set to ${name.replace(/\(.*?\)/g, '').trim()}. At your service, sir.`)
+        demo.say(`Голос: ${name.replace(/\(.*?\)/g, '').trim()}. К вашим услугам, сэр.`)
         void demo.end()
         return
       }
@@ -638,7 +639,7 @@ export default function App() {
         silence()
         const t = createSpeaker()
         speaker.current = t
-        t.say('Audio test. If you can hear this, speech output is working, sir.')
+        t.say('Проверка звука. Если вы это слышите, речь работает, сэр.')
         void t.end().then(() => {
           const d = (window as unknown as Record<string, Record<string, unknown>>).__tts
           console.info('[jarvis] audio test →', d)
